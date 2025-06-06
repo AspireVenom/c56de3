@@ -1,20 +1,21 @@
-// src/api/fetchBlueprintGraph.ts
-//
-import { GraphResponse } from "../types/graph";
-
-export async function fetchBlueprintGraph(): Promise<GraphResponse> {
-  const res = await fetch(
-    "https://api.avantos-dev.io/api/v1/123/actions/blueprints/bp_456/bpv_123/graph",
+export async function fetchBlueprintGraph(
+  tenantId: string,
+  blueprintId: string,
+  blueprintVersionId: string,
+) {
+  const response = await fetch(
+    `http://localhost:3001/api/v1/${tenantId}/actions/blueprints/${blueprintId}/${blueprintVersionId}/graph`,
     {
+      method: "GET",
       headers: {
-        Accept: "application/json, appliocation/problem+json",
+        Accept: "application/json",
       },
     },
   );
 
-  if (!res.ok) {
-    throw new Error(`HTTP error ${response.status}: failed to fetch`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch blueprint graph: ${response.statusText}`);
   }
 
-  return res.json;
+  return await response.json();
 }

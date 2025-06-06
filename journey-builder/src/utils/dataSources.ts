@@ -1,39 +1,43 @@
-export type PrefillSourceType =
-  | "directDependency"
-  | "transitiveDependency"
-  | "globalData";
-
-export interface PrefillOption {
+export type PrefillOption = {
   label: string;
   value: string;
-}
-
-export interface PrefillOption {
-  label: string;
-  value: string;
-}
+};
 
 export interface PrefillContext {
   currentFormId: string;
-  forms: any[];
+  forms: {
+    id: string;
+    name: string;
+    field_schema?: {
+      properties?: Record<string, unknown>;
+    };
+  }[];
   edges: { source: string; target: string }[];
   globalData: Record<string, string>;
+}
+
+export interface PrefillSource {
+  label: string;
+  fetchOptions: (context: PrefillContext) => PrefillOption[];
 }
 
 function getDependencyMap(edges: { source: string; target: string }[]) {
   const map = new Map<string, Set<string>>();
   for (const { source, target } of edges) {
     if (!map.has(target)) map.set(target, new Set());
+    map.get(target)!.add(source);
   }
   return map;
 }
 
-function getDependencies(
+export function getDependencyForms(
   formId: string,
-  depMap: Map<string, Set<string>>,
-  transitive = false,
-): Set<string> {
+  edges: { source: string; target: string }[],
+  transitive: boolean,
+): string[] {
+  const depMap = getDependencyMap(edges);
   const result = new Set<string>();
+
   const visit = (id: string) => {
     if (!depMap.has(id)) return;
     for (const parent of depMap.get(id)!) {
@@ -43,52 +47,39 @@ function getDependencies(
       }
     }
   };
+
   visit(formId);
-  return result;
+  return [...result];
 }
 
-function extractFormFields(forms: any[], ids: Set<string>): PrefillOption[] {
-  const fields: PrefillOptions[] = [];
-  for (const form of forms) {
-    if (!ids.has(form.id)) continue;
-    const schemaProps = form.field_schema?.properties || {};
-    for (const form of forms) {
-      fields.push({
-        label: `${form.name}: ${key}`,
-        value: `${form.id}.${key}`,
-      });
-    }
-  }
-  return fields;
+function extractFormFields(
+  form: PrefillContext["forms"][number],
+): PrefillOption[] {
+  const properties = form.field_schema?.properties || {};
+  return Object.keys(properties).map((key) => ({
+    label: `${form.name}: ${key}`,
+    value: `${form.id}.${key}`,
+  }));
+}
+export function buildFormFieldSource(
+  formId: string,
+  form: PrefillContext["forms"][number] | undefined,
+): PrefillSource {
+  return {
+    label: `Form ${form?.name || formId}`,
+    fetchOptions: () => (form ? extractFormFields(form) : []),
+  };
 }
 
-export const dataSources: prefillSource[] = [
-  {
-    type: "directDependency",
-    label: "Direct Dependency",
-    fetchOptions: ({ currentFormId, forms, edges }) => {
-      const depMap = getDependencyMap(edges);
-      const deps = getDependencies(currentFormId, depMap, false);
-      return extractFormFields(forms, deps);
-    },
-  },
-  {
-    type: "transitiveDependency",
-    label: "Transitive Dependency",
-    fetchOptions: ({ currentFormId, forms, edges }) => {
-      const depMap = getDependencyMap(edges);
-      const deps = getDependencies(currentFormId, depMap, false);
-      return extractFormFields(forms, deps);
-    },
-  },
-  {
-    type: "globalData",
+export function buildGlobalSource(
+  globalData: Record<string, string>,
+): PrefillSource {
+  return {
     label: "Global Data",
-    fetchOptions: ({ globalData }) => {
-      return Object.entries(globalData).map(([key, value]) => ({
+    fetchOptions: () =>
+      Object.entries(globalData).map(([key, value]) => ({
         label: `Global: ${key}`,
-        value: value,
-      }));
-    },
-  },
-];
+        value,
+      })),
+  };
+}
